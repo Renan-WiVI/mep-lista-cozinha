@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lista M.E.P — Mise en Place</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#141311; --card:#1e1c19; --card-edge:#2a2723;
+    --paper:#f2ede2; --muted:#8f887c; --line:#38352f;
+    --brick:#b8452f; --brick-dim:#7a3324; --green:#4f8f5f; --green-dim:#365f40;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size:16px 16px;
+    color:var(--paper); font-family:'IBM Plex Mono', monospace;
+    padding:0 0 64px 0; min-height:100vh;
+  }
+  .wrap{max-width:720px;margin:0 auto;padding:0 16px;}
+  header{
+    position:sticky; top:0; z-index:20;
+    background:linear-gradient(180deg, var(--bg) 78%, transparent);
+    padding:22px 16px 14px 16px; border-bottom:1px solid var(--line);
+  }
+  header .inner{max-width:720px;margin:0 auto;}
+  .eyebrow{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brick); font-weight:600; margin-bottom:4px;}
+  h1{font-family:'Oswald',sans-serif; font-weight:700; font-size:clamp(28px,7vw,38px); letter-spacing:.02em; margin:0; text-transform:uppercase; color:var(--paper);}
+  .progress-row{display:flex; align-items:center; gap:12px; margin-top:14px;}
+  .progress-track{flex:1; height:8px; border:1px solid var(--line); position:relative; overflow:hidden;}
+  .progress-fill{height:100%; background:repeating-linear-gradient(45deg,var(--brick),var(--brick) 6px,var(--brick-dim) 6px,var(--brick-dim) 12px); width:0%; transition:width .4s ease;}
+  .progress-fill.full{background:var(--green);}
+  .progress-label{font-size:12px; color:var(--muted); white-space:nowrap; letter-spacing:.03em;}
+  .subrow{display:flex; justify-content:space-between; align-items:center; margin-top:10px;}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px;animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .sync-note{font-size:11px;color:var(--muted);letter-spacing:.03em;}
+  .reset-btn{background:none; border:1px solid var(--line); color:var(--muted); font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.05em; padding:6px 10px; cursor:pointer; text-transform:uppercase;}
+  .reset-btn:hover{border-color:var(--brick); color:var(--brick);}
+  .section-title{font-family:'Oswald',sans-serif; font-weight:600; font-size:13px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin:34px 0 12px 0; display:flex; align-items:center; gap:10px;}
+  .section-title::after{content:'';flex:1;height:1px;background:var(--line);}
+  .ticket{background:var(--card); border:1px solid var(--card-edge); margin-bottom:14px; position:relative; transition:border-color .25s ease;}
+  .ticket::before{content:''; display:block; height:6px; background:radial-gradient(circle, var(--bg) 3px, transparent 3.2px); background-size:14px 12px; background-position:2px center;}
+  .ticket.done{border-color:var(--green-dim);}
+  .ticket-head{display:flex; justify-content:space-between; align-items:flex-start; padding:14px 16px 10px 16px; gap:10px;}
+  .ticket-name{font-family:'Oswald',sans-serif; font-weight:600; font-size:17px; letter-spacing:.01em; color:var(--paper); text-transform:uppercase;}
+  .stamp{font-family:'Oswald',sans-serif; font-size:11px; font-weight:700; letter-spacing:.14em; padding:4px 9px; border:2px solid var(--brick); color:var(--brick); transform:rotate(-4deg); white-space:nowrap; text-transform:uppercase; flex-shrink:0;}
+  .stamp.done{border-color:var(--green); color:var(--green);}
+  .tasks{list-style:none; margin:0; padding:0 16px 16px 16px; display:flex; flex-direction:column; gap:9px;}
+  .task{display:flex; align-items:center; gap:11px; cursor:pointer; user-select:none;}
+  .box{width:19px; height:19px; border:1px solid var(--muted); flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:all .15s ease;}
+  .box svg{width:12px;height:12px;opacity:0;transition:opacity .1s ease;}
+  .task.checked .box{background:var(--green-dim); border-color:var(--green);}
+  .task.checked .box svg{opacity:1;}
+  .task-text{font-size:13.5px; line-height:1.35; color:var(--paper); transition:color .15s ease;}
+  .task.checked .task-text{color:var(--muted); text-decoration:line-through; text-decoration-color:var(--line);}
+  footer{max-width:720px; margin:40px auto 0 auto; padding:0 16px; text-align:center;}
+  footer p{font-size:11px; color:var(--muted); letter-spacing:.03em;}
+  .status-banner{max-width:720px;margin:0 auto;padding:10px 16px;font-size:11px;color:var(--brick);letter-spacing:.03em;display:none;}
+  @media(prefers-reduced-motion: reduce){.live-dot{animation:none;} *{transition:none !important;}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="inner">
+    <div class="eyebrow">Casica · Cozinha</div>
+    <h1>Lista M.E.P</h1>
+    <div class="progress-row">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">0 / 0</div>
+    </div>
+    <div class="subrow">
+      <span class="sync-note"><span class="live-dot"></span>partilhado com todos os cozinheiros</span>
+      <button class="reset-btn" id="resetBtn">Novo turno · limpar</button>
+    </div>
+  </div>
+</header>
+
+<div class="status-banner" id="statusBanner">A ligar…</div>
+<div class="wrap" id="listWrap"></div>
+
+<footer>
+  <p>Toque numa tarefa para marcar. Atualiza para toda a cozinha em tempo real.</p>
+</footer>
+
+<script>
+const SUPABASE_URL = "https://krlmnprlxzydwiixkhla.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtybG1ucHJseHp5ZHdpaXhraGxhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyODI3MjIsImV4cCI6MjA5Mzg1ODcyMn0.0Wr947HDkmcGIHRBBBZMiSrMWPl22-TVrHDJ7IHjFP4";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const DATA = [
+  { section: "Entradas Frias", items: [
+    { name: "Bruschetta T.", tasks: ["Tomate mix","Molho Pizza (P)","Arranjar manjericão"] },
+    { name: "Supli (Arancini)", tasks: ["Abrir arroz supli (cozido e frio)","Panar com ovo e pão ralado","Molho de tomate para a base"] },
+    { name: "Carpaccio", tasks: ["Arranjar ganso (cortar/dispor carne)","Alcaparra fruto","Molho de parmesão e alcaparra","Lascas de parmesão","Rúcula"] },
+    { name: "Caprese", tasks: ["Cortar tomates cherry","Pesto genovese (P)","Rúcula e espinafre baby"] },
+    { name: "Caesar Camarão", tasks: ["Arranjar camarão (limpar/marcar)","Cortar alface","Tomate seco","Molho Caesar","Molica (preparar panko)","Courgette amarela"] },
+    { name: "Burrata & Figo", tasks: ["Fatiar e caramelizar figos","Pera laminada","Tomate cherry confitado","Relar Parmesão"] },
+    { name: "Focaccia Nonna", tasks: ["Cortar base de focaccia (7x4 dedos)","Cherry confitado","Pera laminada","Pesto","Relar Parmesão"] },
+  ]},
+  { section: "Massas", items: [
+    { name: "Linguini Gamberi", tasks: ["Camarão limpo","Bisque (caldo de camarão)","Molho de tomate","Picar salsa"] },
+    { name: "Spaghetti Bolognese", tasks: ["Preparado de carne Bolognese (P)","Molho de tomate","Relar Parmesão"] },
+    { name: "Paccheri Pomodoro", tasks: ["Molho de tomate","Relar Parmesão","Arranjar manjericão"] },
+    { name: "Ragu di Funghi", tasks: ["Preparado de cogumelos (P)","Puré de cogumelos (P)","Molho de tomate","Relar Parmesão"] },
+    { name: "Gnocchi Pomodorini", tasks: ["Azeite de alho","Tomate cherry confitado","Molho de tomate","Relar Parmesão"] },
+    { name: "Ravioli Espinafre", tasks: ["Avelã picada","Relar Parmesão","Arranjar folhas de espinafre"] },
+    { name: "Pasta Nero", tasks: ["Cortar lula em anéis","Mexilhão limpo","Camarão limpo","Bisque","Molho Romesco","Picar salsa"] },
+  ]},
+  { section: "Risotti", items: [
+    { name: "Risotto ai Funghi", tasks: ["Preparado de cogumelos (P)","Puré de cogumelos (P)","Cogumelos decoração (saltear)","Relar Parmesão","Azeite de trufa"] },
+    { name: "Risotto Gamberi", tasks: ["Camarão limpo","Cortar courgette verde e amarela","Puré de courgette verde (P)","Bisque","Molho de tomate","Relar Parmesão"] },
+    { name: "Risotto Pesto Atum", tasks: ["Pesto Genovese","Selar e fatiar lombo de atum","Cherry confit","Relar Parmesão"] },
+  ]},
+  { section: "Carnes & Pratos", items: [
+    { name: "Tagliata (Vazia)", tasks: ["Cortar/bater bife de vazia","Cortar batata nova em quatro","Molho de mostarda de dijon (P)","Tomate cherry e rúcula","Relar Parmesão","Picar alho e alecrim"] },
+    { name: "Couscous Atum", tasks: ["Hidratar couscous","Saltear legumes","Panar atum em sésamo preto e selar","Puré de couve-flor","Tomate cherry confitado"] },
+  ]},
+  { section: "Pinse", items: [
+    { name: "Pinsa Tonno", tasks: ["Molho tomate pizza (P)","Atum desfiado","Cebola caramelizada (P)","Relar Parmesão"] },
+    { name: "Pinsa Margherita", tasks: ["Molho tomate pizza (P)","Relar Parmesão","Arranjar manjericão"] },
+    { name: "Pinsa Funghi", tasks: ["Molho tomate pizza (P)","Preparado de cogumelos","Relar Parmesão"] },
+    { name: "Pinsa Diavola", tasks: ["Molho tomate pizza (P)","Fatiar salame picante","Nduja doseada","Relar Parmesão"] },
+    { name: "Pinsa Prosciutto", tasks: ["Molho tomate pizza (P)","Tomate cherry confitado (P)","Fatiar presunto","Relar Parmesão","Arranjar manjericão"] },
+    { name: "Pinsa Mortadela", tasks: ["Fatiar mortadela","Pesto","Pistáchio picado","Relar Parmesão","Arranjar manjericão"] },
+    { name: "Pinsa Pistachio", tasks: ["Creme de pistáchio","Ricotta doce","Triturar pistáchio"] },
+  ]},
+  { section: "Sobremesas", items: [
+    { name: "Tiramisu", tasks: ["Creme de Tiramisu (P)","Montagem dos estratos"] },
+    { name: "Cannoli Pistáchio", tasks: ["Ricotta doce (saco de pasteleiro)","Creme de pistáchio","Triturar pistáchio"] },
+  ]},
+];
+
+let state = {}; // { "<item_id>_<idx>": true/false }
+let totalTasks = 0;
+DATA.forEach(sec => sec.items.forEach(it => {
+  it.id = it.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-');
+  totalTasks += it.tasks.length;
+}));
+
+function checkSvg(){
+  return '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 8.5L6 12.5L14 3.5" stroke="#f2ede2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+function isChecked(itemId, idx){ return !!state[itemId+'_'+idx]; }
+
+function render(){
+  const wrap = document.getElementById('listWrap');
+  wrap.innerHTML = '';
+  let doneTasks = 0;
+
+  DATA.forEach(sec => {
+    const h = document.createElement('div');
+    h.className = 'section-title';
+    h.textContent = sec.section;
+    wrap.appendChild(h);
+
+    sec.items.forEach(it => {
+      const flags = it.tasks.map((_, idx) => isChecked(it.id, idx));
+      const allDone = flags.every(Boolean);
+      doneTasks += flags.filter(Boolean).length;
+
+      const ticket = document.createElement('div');
+      ticket.className = 'ticket' + (allDone ? ' done' : '');
+
+      const head = document.createElement('div');
+      head.className = 'ticket-head';
+      head.innerHTML = `<div class="ticket-name">${it.name}</div>
+        <div class="stamp ${allDone ? 'done' : ''}">${allDone ? 'Pronto' : 'Produzir'}</div>`;
+      ticket.appendChild(head);
+
+      const ul = document.createElement('ul');
+      ul.className = 'tasks';
+      it.tasks.forEach((t, idx) => {
+        const li = document.createElement('li');
+        li.className = 'task' + (flags[idx] ? ' checked' : '');
+        li.innerHTML = `<span class="box">${checkSvg()}</span><span class="task-text">${t}</span>`;
+        li.addEventListener('click', () => toggleTask(it.id, idx));
+        ul.appendChild(li);
+      });
+      ticket.appendChild(ul);
+      wrap.appendChild(ticket);
+    });
+  });
+
+  const pct = totalTasks ? Math.round((doneTasks/totalTasks)*100) : 0;
+  const fill = document.getElementById('progressFill');
+  fill.style.width = pct + '%';
+  fill.classList.toggle('full', pct === 100);
+  document.getElementById('progressLabel').textContent = `${doneTasks} / ${totalTasks}`;
+}
+
+async function loadState(){
+  const banner = document.getElementById('statusBanner');
+  const { data, error } = await sb.from('mep_checklist').select('item_id, task_idx, checked');
+  if(error){
+    banner.style.display = 'block';
+    banner.textContent = 'Sem ligação ao servidor — a tentar novamente…';
+    setTimeout(loadState, 4000);
+    return;
+  }
+  banner.style.display = 'none';
+  state = {};
+  (data || []).forEach(row => { state[row.item_id+'_'+row.task_idx] = row.checked; });
+  render();
+}
+
+async function toggleTask(itemId, idx){
+  const key = itemId+'_'+idx;
+  const next = !state[key];
+  state[key] = next; // optimistic
+  render();
+  const { error } = await sb.from('mep_checklist').upsert(
+    { item_id: itemId, task_idx: idx, checked: next, updated_at: new Date().toISOString() },
+    { onConflict: 'item_id,task_idx' }
+  );
+  if(error){ state[key] = !next; render(); }
+}
+
+document.getElementById('resetBtn').addEventListener('click', async () => {
+  if(confirm('Limpar todas as marcações para um novo turno? Esta ação afeta a lista de todos.')){
+    await sb.from('mep_checklist').delete().neq('item_id', '');
+    state = {};
+    render();
+  }
+});
+
+// Realtime: reflect other cooks' taps immediately
+sb.channel('mep_checklist_changes')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'mep_checklist' }, (payload) => {
+    if(payload.eventType === 'DELETE'){
+      // full reset happened elsewhere
+      loadState();
+      return;
+    }
+    const row = payload.new;
+    state[row.item_id+'_'+row.task_idx] = row.checked;
+    render();
+  })
+  .subscribe();
+
+loadState();
+</script>
+</body>
+</html>
